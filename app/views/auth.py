@@ -34,7 +34,7 @@ class RegistrationView(MethodView):
                     'message': 'User already exists. Please login.'
                 }
 
-                return make_response(jsonify(response)), 409
+                return make_response(jsonify(response)), 400
 
             password = post_data.get("password", "").strip()
             if not password:
@@ -78,12 +78,45 @@ class RegistrationView(MethodView):
                         'message': 'Please enter a valid phone number'
                     }
                     return make_response(jsonify(response)), 400
+            is_admin = post_data.get("is_admin")
+            try:
+                is_admin = int(is_admin)
+            except ValueError:
+                response = {
+                    'message': 'is_admin must be either 0 or 1'
+                }
 
-            user = User(email=email, password=password, full_name=full_name, phone=phone)
+                return make_response(jsonify(response)), 400
+            except TypeError:
+                response = {
+                    'message': 'is_admin is not provided, must be either 0 or 1 '
+                }
+
+                return make_response(jsonify(response)), 400
+
+            if not( is_admin == 1 or is_admin == 0):
+                response = {
+                    'message': 'is_admin must be either 0 or 1'
+                }
+                return make_response(jsonify(response)), 400
+
+            user = User(email=email, password=password, full_name=full_name, phone=phone, is_admin=is_admin)
             user.save()
 
+            access_token = user.generate_token(user.user_id)
+            if access_token:
+                user_dic = {
+                    'id': user.user_id,
+                    'full_name': user.full_name,
+                    'is_admin': user.is_admin,
+                    'email': user.email,
+                    'phone': user.phone
+                }
+
             response = {
-                'message': 'You registered successfully. Please log in.'
+                'message': 'You registered successfully.',
+                'access_token': access_token.decode(),
+                'user': user_dic
             }
             # return a response notifying the user that they registered successfully
             return make_response(jsonify(response)), 201
@@ -103,17 +136,38 @@ class LoginView(MethodView):
         """Handle POST request for this view. Url ---> /auth/login"""
         try:
             # Get the user object using their email (unique to every user)
+            email = request.data.get("email", "").strip()
+            if not email:
+                response = {
+                    'message': 'Please enter an email'
+                }
+                return make_response(jsonify(response)), 400
             user = User.query.filter_by(email=request.data['email'].strip()).first()
 
-
             # Try to authenticate the found user using their password
+            password = request.data.get("password", "").strip()
+            if not password:
+                response = {
+                    'message': 'Please enter a password'
+                }
+                return make_response(jsonify(response)), 400
+
             if user and user.password_is_valid(request.data['password'].strip()):
                 # Generate the access token. This will be used as the authorization header
-                access_token = user.generate_token(user.id)
+
+                access_token = user.generate_token(user.user_id)
                 if access_token:
+                    user_dic ={
+                        'id': user.user_id,
+                        'full_name': user.full_name,
+                        'is_admin': user.is_admin,
+                        'email': user.email,
+                        'phone': user.phone
+                    }
                     response = {
                         'message': 'You logged in successfully.',
-                        'access_token': access_token.decode()
+                        'access_token': access_token.decode(),
+                        'user': user_dic
                     }
                     return make_response(jsonify(response)), 200
             else:
@@ -129,6 +183,7 @@ class LoginView(MethodView):
                 'message': str(e)
             }
             # Return a server error using the HTTP Error Code 500 (Internal Server Error)
+            print(response)
             return make_response(jsonify(response)), 500
 
 registration_view = RegistrationView.as_view('registration_view')

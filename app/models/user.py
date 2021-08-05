@@ -20,13 +20,13 @@ class User(db.Model):
     phone = db.Column(db.String(256), nullable=True)
     date_modified = db.Column(db.DateTime, default=db.func.current_timestamp(),onupdate=db.func.current_timestamp())
 
-
-    def __init__(self, email, password, full_name, phone=None):
+    def __init__(self, email, password, full_name, phone=None, is_admin=0):
         """Initialize the user with an email and a password."""
         self.email = email
         self.password = Bcrypt().generate_password_hash(password).decode()
         self.phone = phone
         self.full_name = full_name
+        self.is_admin = is_admin
 
     def password_is_valid(self, password):
         """
