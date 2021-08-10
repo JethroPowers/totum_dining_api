@@ -8,7 +8,7 @@ from instance.config import app_config
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
-print("HEALTH " * 5)
+
 # initialize sql-alchemy
 db = SQLAlchemy()
 

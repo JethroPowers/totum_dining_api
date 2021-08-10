@@ -64,6 +64,20 @@ class User(db.Model):
             return str(e)
 
     @staticmethod
+    def decode_token(token):
+        """Decodes the access token from the Authorization header."""
+        try:
+            # try to decode the token using our SECRET variable
+            payload = jwt.decode(token, Config.SECRET)
+            return payload['sub']
+        except jwt.ExpiredSignatureError:
+            # the token is expired, return an error string
+            return "Expired token. Please login to get a new token"
+        except jwt.InvalidTokenError:
+            # the token is invalid, return an error string
+            return "Invalid token. Please register or login"
+
+    @staticmethod
     def get_all():
         return User.query.all()
 
@@ -72,4 +86,4 @@ class User(db.Model):
         db.session.commit()
 
     def __repr__(self):
-        return "<User: {}>".format(self.name)
+        return "<User: {}>".format(self.email)

@@ -1,16 +1,17 @@
 from . import auth_blueprint
 
 from flask.views import MethodView
+from flask_bcrypt import Bcrypt
 from flask import make_response, request, jsonify
 from app.models.user import User
 import phonenumbers
 import re
 
-class RegistrationView(MethodView):
-    """This class registers a new user."""
+
+class UsersView(MethodView):
 
     def post(self):
-        """Handle POST request for this view. Url ---> /auth/register"""
+        """Handle POST request for this view. Url ---> /users"""
         try:
             post_data = request.data
             # Query to see if the user already exists
@@ -104,14 +105,13 @@ class RegistrationView(MethodView):
             user.save()
 
             access_token = user.generate_token(user.user_id)
-            if access_token:
-                user_dic = {
-                    'id': user.user_id,
-                    'full_name': user.full_name,
-                    'is_admin': user.is_admin,
-                    'email': user.email,
-                    'phone': user.phone
-                }
+            user_dic = {
+                'id': user.user_id,
+                'full_name': user.full_name,
+                'is_admin': user.is_admin,
+                'email': user.email,
+                'phone': user.phone
+            }
 
             response = {
                 'message': 'You registered successfully.',
@@ -127,6 +127,116 @@ class RegistrationView(MethodView):
             }
             return make_response(jsonify(response)), 400
 
+    def put(self):
+        auth_header = request.headers.get('Authorization')
+        if auth_header is None:
+            response = jsonify({
+                'message': f'Authorization header missing',
+                'status': 'error'
+            })
+            response.status_code = 401
+            return response
+        if auth_header == '':
+            response = jsonify({
+                'message': f'Please insert Bearer token',
+                'status': 'error'
+            })
+            response.status_code = 401
+            return response
+        access_token = auth_header.split(" ")
+        if len(access_token) < 2:
+            response = jsonify({
+                'message': f'Authorization token should start with keyword Bearer',
+                'status': 'error'
+            })
+            response.status_code = 401
+            return response
+        access_token = auth_header.split(" ")[1]
+
+        if access_token:
+            # Get the user id related to this access token
+            user_id = User.decode_token(access_token)
+
+        else:
+            response = jsonify({
+                'message': f'Please enter an access token',
+                'status': 'error'
+            })
+            response.status_code = 401
+            return response
+
+        user = User.query.get(user_id)
+
+        post_data = request.data
+
+        email = post_data.get("email", "").strip()
+        if email:
+            email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+            if not (re.match(email_regex, email)):
+                response = {
+                    'message': 'Please enter a valid email'
+                }
+                return make_response(jsonify(response)), 400
+            user.email = email
+        new_password = post_data.get("new_password", "").strip()
+        current_password = post_data.get("current_password", "").strip()
+        if new_password:
+            password_reg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$"
+            compile_pat = re.compile(password_reg)
+            password_check = re.search(compile_pat, new_password)
+            if not password_check:
+                response = {
+                    'message': 'Please enter a valid password'
+                }
+                return make_response(jsonify(response)), 400
+            if not user.password_is_valid(current_password.strip()):
+                response = {
+                    'message': 'the current password is incorrect, please enter'
+                               ' your current password to change you password'
+                }
+                return make_response(jsonify(response)), 400
+            user.password = Bcrypt().generate_password_hash(new_password).decode()
+
+        full_name = post_data.get("full_name", "").strip()
+        if full_name:
+            fullname_reg = '[A-Za-z]{2,25}( [A-Za-z]{2,25})?'
+            compile_reg = re.compile(fullname_reg)
+            name_check = re.search(compile_reg, fullname_reg)
+            if not name_check:
+                response = {
+                    'message': 'Please enter a valid full name'
+                }
+                return make_response(jsonify(response)), 400
+            user.full_name = full_name
+        phone = post_data.get("phone", "").strip()
+        if phone:
+            phone = phone.strip()
+            try:
+                user_phone = phonenumbers.parse(phone)
+                valid_number = phonenumbers.is_valid_number(user_phone)
+                if not valid_number:
+                    raise phonenumbers.NumberParseException(100, "invalid number")
+            except phonenumbers.NumberParseException:
+                response = {
+                    'message': 'Please enter a valid phone number'
+                }
+                return make_response(jsonify(response)), 400
+            user.phone = phone
+        user.save()
+
+        user_dic = {
+            'id': user.user_id,
+            'full_name': user.full_name,
+            'is_admin': user.is_admin,
+            'email': user.email,
+            'phone': user.phone
+        }
+        response = jsonify({
+            'message': f'success',
+            'user': user_dic
+        })
+        response.status_code = 200
+        return response
 
 
 class LoginView(MethodView):
@@ -186,15 +296,16 @@ class LoginView(MethodView):
             print(response)
             return make_response(jsonify(response)), 500
 
-registration_view = RegistrationView.as_view('registration_view')
+users_view = UsersView.as_view('users_view')
 login_view = LoginView.as_view('login_view')
 
-# Define the rule for the registration url --->  /auth/register
+# Define the rule for the registration url --->  /users
 # Then add the rule to the blueprint
 auth_blueprint.add_url_rule(
-    '/auth/register',
-    view_func=registration_view,
-    methods=['POST'])
+    '/users',
+    view_func=users_view,
+    methods=['POST', 'PUT'])
+
 
 # Define the rule for the registration url --->  /auth/login
 # Then add the rule to the blueprint
