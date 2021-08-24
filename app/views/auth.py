@@ -152,10 +152,23 @@ class UsersView(MethodView):
             response.status_code = 401
             return response
         access_token = auth_header.split(" ")[1]
-
         if access_token:
             # Get the user id related to this access token
-            user_id = User.decode_token(access_token)
+            user_id, code = User.decode_token(access_token)
+            if code == 1:
+                response = jsonify({
+                    'message': f'Expired token. Please login to get a new token',
+                    'status': 'error'
+                })
+                response.status_code = 401
+                return response
+            elif code == 2:
+                response = jsonify({
+                    'message': f'Invalid token. Please register or login',
+                    'status': 'error'
+                })
+                response.status_code = 401
+                return response
 
         else:
             response = jsonify({
@@ -189,10 +202,10 @@ class UsersView(MethodView):
                     'message': 'Please enter a valid password'
                 }
                 return make_response(jsonify(response)), 400
-            if not user.password_is_valid(current_password.strip()):
+            if not user.is_password_equal(current_password.strip()):
                 response = {
                     'message': 'the current password is incorrect, please enter'
-                               ' your current password to change you password'
+                               ' your current password to change your password'
                 }
                 return make_response(jsonify(response)), 400
             user.password = Bcrypt().generate_password_hash(new_password).decode()
@@ -262,7 +275,7 @@ class LoginView(MethodView):
                 }
                 return make_response(jsonify(response)), 400
 
-            if user and user.password_is_valid(request.data['password'].strip()):
+            if user and user.is_password_equal(request.data['password'].strip()):
                 # Generate the access token. This will be used as the authorization header
 
                 access_token = user.generate_token(user.user_id)

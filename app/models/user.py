@@ -28,7 +28,7 @@ class User(db.Model):
         self.full_name = full_name
         self.is_admin = is_admin
 
-    def password_is_valid(self, password):
+    def is_password_equal(self, password):
         """
         Checks the password against it's hash to validates the user's password
         """
@@ -69,13 +69,13 @@ class User(db.Model):
         try:
             # try to decode the token using our SECRET variable
             payload = jwt.decode(token, Config.SECRET)
-            return payload['sub']
+            return payload['sub'], 0
         except jwt.ExpiredSignatureError:
             # the token is expired, return an error string
-            return "Expired token. Please login to get a new token"
+            return ("Expired token. Please login to get a new token", 1)
         except jwt.InvalidTokenError:
             # the token is invalid, return an error string
-            return "Invalid token. Please register or login"
+            return ("Invalid token. Please register or login", 2)
 
     @staticmethod
     def get_all():
